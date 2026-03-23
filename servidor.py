@@ -14,7 +14,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS jogadores (id TEXT, status TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS jogos 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, p1 TEXT, p2 TEXT, 
-                 palavra TEXT, oculta TEXT, erros INTEGER, turno TEXT, status TEXT)''')
+                 palavra TEXT, oculta TEXT, erros INTEGER, turno TEXT, status TEXT, tentativas TEXT)''')
     conn.commit()
     conn.close()
 
@@ -32,8 +32,8 @@ def matchmaker():
                 palavra = random.choice(PALAVRAS)
                 oculta = "_" * len(palavra)
                 
-                c.execute("INSERT INTO jogos (p1, p2, palavra, oculta, erros, turno, status) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-                          (p1, p2, palavra, oculta, 0, p1, 'active'))
+                c.execute("INSERT INTO jogos (p1, p2, palavra, oculta, erros, turno, status, tentativas) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                          (p1, p2, palavra, oculta, 0, p1, 'active', ''))
                 c.execute("UPDATE jogadores SET status='playing' WHERE id IN (?, ?)", (p1, p2))
                 conn.commit()
         except sqlite3.Error:
@@ -69,16 +69,17 @@ def handle_client(conn, addr):
     
     while True:
         try:
-            c.execute("SELECT p1, p2, palavra, oculta, erros, turno, status FROM jogos WHERE id=?", (game_id,))
+            c.execute("SELECT p1, p2, palavra, oculta, erros, turno, status, tentativas FROM jogos WHERE id=?", (game_id,))
             game = c.fetchone()
             
             if not game:
                 break
                 
-            p1, p2, palavra, oculta, erros, turno, status = game
+            p1, p2, palavra, oculta, erros, turno, status, tentativas = game
             
             if oculta != last_oculta or erros != last_erros:
-                estado = f"\nPalavra: {' '.join(oculta)} | Erros: {erros}/6\n"
+                letras_tentadas = ' '.join(tentativas.split(',')) if tentativas else ''
+                estado = f"\nPalavra: {' '.join(oculta)} | Erros: {erros}/6 | Tentativas: {letras_tentadas}\n"
                 conn.sendall(estado.encode())
                 last_oculta = oculta
                 last_erros = erros
@@ -100,6 +101,7 @@ def handle_client(conn, addr):
                     break
                 
                 if len(chute) == 1 and chute.isalpha():
+                    novas_tentativas = f"{tentativas},{chute}" if tentativas else chute
                     nova_oculta = list(oculta)
                     if chute in palavra:
                         for i, letra in enumerate(palavra):
@@ -108,14 +110,14 @@ def handle_client(conn, addr):
                         nova_oculta_str = "".join(nova_oculta)
                         novo_turno = p2 if player_id == p1 else p1
                         novo_status = 'finished' if "_" not in nova_oculta_str else 'active'
-                        c.execute("UPDATE jogos SET oculta=?, turno=?, status=? WHERE id=?", 
-                                  (nova_oculta_str, novo_turno, novo_status, game_id))
+                        c.execute("UPDATE jogos SET oculta=?, turno=?, status=?, tentativas=? WHERE id=?", 
+                                  (nova_oculta_str, novo_turno, novo_status, novas_tentativas, game_id))
                     else:
                         erros += 1
                         novo_turno = p2 if player_id == p1 else p1
                         novo_status = 'finished' if erros >= 6 else 'active'
-                        c.execute("UPDATE jogos SET erros=?, turno=?, status=? WHERE id=?", 
-                                  (erros, novo_turno, novo_status, game_id))
+                        c.execute("UPDATE jogos SET erros=?, turno=?, status=?, tentativas=? WHERE id=?", 
+                                  (erros, novo_turno, novo_status, novas_tentativas, game_id))
                     db.commit()
             elif turno != player_id and last_turno != turno:
                 conn.sendall(b"Aguardando o turno do adversario...\n")

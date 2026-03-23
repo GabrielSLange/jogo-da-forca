@@ -34,6 +34,9 @@ class ForcaClient(ctk.CTk):
         self.status_label = ctk.CTkLabel(self, text="Desconectado", font=("Arial", 16), wraplength=500)
         self.status_label.pack(pady=10)
 
+        self.tried_label = ctk.CTkLabel(self, text="", font=("Arial", 14), text_color="gray")
+        self.tried_label.pack(pady=5)
+
         self.input_frame = ctk.CTkFrame(self)
         self.input_frame.pack(pady=15)
 
@@ -106,6 +109,13 @@ class ForcaClient(ctk.CTk):
                 self.draw_hangman(erros)
             except ValueError:
                 pass
+            
+            if len(partes) >= 3:
+                tentativas_str = partes[2].replace("Tentativas:", "").strip()
+                if tentativas_str:
+                    self.tried_label.configure(text=f"Letras tentadas: {tentativas_str}")
+                else:
+                    self.tried_label.configure(text="")
             
             self.status_label.configure(text="")
         else:
