@@ -40,6 +40,20 @@ server_info = {
     "lock": threading.Lock(),
 }
 
+# Registro de conexões ativas de jogadores aguardando — para notificações push
+waiting_clients = {}  # player_id -> socket connection
+waiting_clients_lock = threading.Lock()
+
+def notify_waiting_players(new_player_id, new_player_nome):
+    """Notifica jogadores na fila que um novo jogador se conectou."""
+    with waiting_clients_lock:
+        for pid, conn in list(waiting_clients.items()):
+            if pid != new_player_id:
+                try:
+                    safe_send(conn, f"📢 Novo jogador na fila: {new_player_nome}! Pareamento em breve...\n")
+                except Exception:
+                    pass
+
 def get_db_path():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'forca.db')
 
@@ -162,6 +176,8 @@ def handle_client(client_conn, addr):
         else:
             cursor.execute("UPDATE jogadores SET status='waiting' WHERE id=?", (player_id,))
             safe_send(client_conn, "Sua partida anterior ja terminou. Aguardando novo adversario...\n")
+            with waiting_clients_lock:
+                waiting_clients[player_id] = client_conn
         db_conn.commit()
     else:
         cursor.execute(
@@ -169,8 +185,12 @@ def handle_client(client_conn, addr):
             (player_id, player_nome, 'waiting', server_info["port"])
         )
         db_conn.commit()
+        with waiting_clients_lock:
+            waiting_clients[player_id] = client_conn
         if not safe_send(client_conn, f"Ola {player_nome}. Aguardando adversario...\n"):
             return
+        # Notificar outros jogadores na fila que alguém novo entrou
+        notify_waiting_players(player_id, player_nome)
 
     last_oculta = ""
     last_erros = -1
@@ -185,6 +205,9 @@ def handle_client(client_conn, addr):
                 r = cursor.fetchone()
                 if r:
                     game_id = r[0]
+                    # Remover da lista de espera
+                    with waiting_clients_lock:
+                        waiting_clients.pop(player_id, None)
                     safe_send(client_conn, "Adversario encontrado! O jogo vai comecar.\n")
                     last_oculta = ""
                     last_erros = -1
@@ -243,22 +266,39 @@ def handle_client(client_conn, addr):
                         break
 
                 if status == 'finished':
+                    # Como o 'turno' no banco foi invertido após a última jogada, 
+                    # se player_id != turno, então player_id foi quem fez a última jogada.
+                    is_last_player = (player_id != turno)
+                    
                     if "_" not in oculta:
-                        safe_send(client_conn, f"VITORIA! A palavra era: {palavra}\n")
+                        if is_last_player:
+                            safe_send(client_conn, f"VITORIA! Voce acertou a ultima letra: {palavra}\n")
+                        else:
+                            safe_send(client_conn, f"DERROTA! O adversario completou a palavra: {palavra}\n")
                     else:
-                        safe_send(client_conn, f"DERROTA! A palavra era: {palavra}\n")
+                        if is_last_player:
+                            safe_send(client_conn, f"DERROTA! Voce esgotou as chances. A palavra era: {palavra}\n")
+                        else:
+                            safe_send(client_conn, f"VITORIA! O adversario foi enforcado. A palavra era: {palavra}\n")
                     break
 
                 if not opp_is_disconnected and status == 'active':
                     if oculta != last_oculta or erros != last_erros:
-                        letras_tentadas = ' '.join(tentativas.split(',')) if tentativas else ''
+                        # Separar letras certas e erradas
+                        letras_lista = tentativas.split(',') if tentativas else []
+                        letras_certas = [l for l in letras_lista if l in palavra]
+                        letras_erradas = [l for l in letras_lista if l not in palavra]
+                        certas_str = ' '.join(letras_certas) if letras_certas else ''
+                        erradas_str = ' '.join(letras_erradas) if letras_erradas else ''
+
                         partes_corpo = ["cabeca", "tronco", "braco dir.", "braco esq.", "perna dir.", "perna esq."]
                         erros_partes = [partes_corpo[i] for i in range(min(erros, MAX_ERROS))]
                         partes_str = ', '.join(erros_partes) if erros_partes else 'nenhuma'
 
                         estado = (f"\nPalavra: {' '.join(oculta)} | "
                                   f"Erros: {erros}/{MAX_ERROS} ({partes_str}) | "
-                                  f"Tentativas: {letras_tentadas}\n")
+                                  f"Certas: {certas_str} | "
+                                  f"Erradas: {erradas_str}\n")
                         safe_send(client_conn, estado)
                         last_oculta = oculta
                         last_erros = erros
@@ -324,6 +364,10 @@ def handle_client(client_conn, addr):
     except Exception as e:
         print(f"[CONN] {addr} — conexao perdida: {e}")
     finally:
+        # Remover da lista de espera ao desconectar
+        with waiting_clients_lock:
+            waiting_clients.pop(player_id, None)
+
         try:
             cleanup_db = get_db()
             cleanup_cursor = cleanup_db.cursor()

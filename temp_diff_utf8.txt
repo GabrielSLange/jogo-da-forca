@@ -1,0 +1,245 @@
+﻿diff --git a/__pycache__/cliente_gui.cpython-314.pyc b/__pycache__/cliente_gui.cpython-314.pyc
+index f2d3ccb..df9c580 100644
+Binary files a/__pycache__/cliente_gui.cpython-314.pyc and b/__pycache__/cliente_gui.cpython-314.pyc differ
+diff --git a/__pycache__/servidor.cpython-314.pyc b/__pycache__/servidor.cpython-314.pyc
+index 2d6c45e..524c0a2 100644
+Binary files a/__pycache__/servidor.cpython-314.pyc and b/__pycache__/servidor.cpython-314.pyc differ
+diff --git a/cliente_gui.py b/cliente_gui.py
+index 30ed410..033209d 100644
+--- a/cliente_gui.py
++++ b/cliente_gui.py
+@@ -24,7 +24,8 @@ class ForcaClient(ctk.CTk):
+     def __init__(self):
+         super().__init__()
+         self.title("Jogo da Forca Distribu├¡do")
+-        self.geometry("650x800")
++        self.geometry("620x650")
++        self.minsize(550, 600)
+         self.resizable(True, True)
+         self.configure(fg_color=BG_DARK)
+         self.sock = None
+@@ -40,10 +41,10 @@ class ForcaClient(ctk.CTk):
+         self.servers = []
+ 
+         self.header = ctk.CTkLabel(self, text="­ƒÄ« Jogo da Forca Distribu├¡do", font=("Segoe UI", 22, "bold"), text_color=COLOR_WHITE)
+-        self.header.pack(pady=(15, 5))
++        self.header.pack(pady=(10, 5))
+ 
+         self.conn_frame = ctk.CTkFrame(self, fg_color=COLOR_ACCENT, corner_radius=12)
+-        self.conn_frame.pack(pady=8, padx=20, fill="x")
++        self.conn_frame.pack(pady=5, padx=20, fill="x")
+ 
+         row0 = ctk.CTkFrame(self.conn_frame, fg_color="transparent")
+         row0.pack(pady=(10, 5), padx=15, fill="x")
+@@ -79,11 +80,11 @@ class ForcaClient(ctk.CTk):
+         self.latency_label.pack(side="right", padx=10)
+ 
+         self.canvas = ctk.CTkCanvas(self, width=220, height=260, bg=BG_CANVAS, highlightthickness=0)
+-        self.canvas.pack(pady=10)
++        self.canvas.pack(pady=5)
+         self.draw_hangman(0)
+ 
+         self.word_label = ctk.CTkLabel(self, text="_ _ _ _ _", font=("Courier New", 34, "bold"), text_color=COLOR_WHITE)
+-        self.word_label.pack(pady=8)
++        self.word_label.pack(pady=5)
+ 
+         self.status_label = ctk.CTkLabel(self, text="Desconectado", font=("Segoe UI", 15), text_color=COLOR_WAIT, wraplength=550)
+         self.status_label.pack(pady=5)
+@@ -91,11 +92,14 @@ class ForcaClient(ctk.CTk):
+         self.body_label = ctk.CTkLabel(self, text="", font=("Segoe UI", 12), text_color=COLOR_LOSE, wraplength=500)
+         self.body_label.pack(pady=2)
+ 
+-        self.tried_label = ctk.CTkLabel(self, text="", font=("Segoe UI", 13), text_color=COLOR_GRAY)
+-        self.tried_label.pack(pady=3)
++        self.correct_label = ctk.CTkLabel(self, text="", font=("Segoe UI", 13), text_color=COLOR_WIN)
++        self.correct_label.pack(pady=1)
++
++        self.wrong_label = ctk.CTkLabel(self, text="", font=("Segoe UI", 13), text_color=COLOR_LOSE)
++        self.wrong_label.pack(pady=1)
+ 
+         self.input_frame = ctk.CTkFrame(self, fg_color="transparent")
+-        self.input_frame.pack(pady=12)
++        self.input_frame.pack(pady=5)
+ 
+         self.letter_entry = ctk.CTkEntry(self.input_frame, placeholder_text="Letra", width=80, height=40, font=("Courier New", 18, "bold"), justify="center")
+         self.letter_entry.pack(side="left", padx=5)
+@@ -106,7 +110,7 @@ class ForcaClient(ctk.CTk):
+         self.send_btn.pack(side="left", padx=5)
+         self.send_btn.configure(state="disabled")
+ 
+-        self.new_game_btn = ctk.CTkButton(self, text="­ƒöä Novo Jogo", command=self.new_game, width=160, height=40, corner_radius=8, font=("Segoe UI", 14, "bold"), fg_color=COLOR_WIN, hover_color="#00cec9")
++        self.new_game_btn = ctk.CTkButton(self, text="­ƒöä Jogar Novamente", command=self.new_game, width=160, height=40, corner_radius=8, font=("Segoe UI", 14, "bold"), fg_color=COLOR_WIN, hover_color="#00cec9")
+ 
+         self.protocol("WM_DELETE_WINDOW", self.on_closing)
+ 
+@@ -281,6 +285,9 @@ class ForcaClient(ctk.CTk):
+             self.letter_entry.configure(state="normal")
+             self.send_btn.configure(state="normal")
+             return
++        if "Novo jogador na fila" in message or "Pareamento em breve" in message:
++            self.status_label.configure(text=message, text_color=COLOR_WIN)
++            return
+ 
+         self.status_label.configure(text=message, text_color=COLOR_WHITE)
+ 
+@@ -296,9 +303,15 @@ class ForcaClient(ctk.CTk):
+                 body_parts = erros_str[erros_str.index("(")+1:erros_str.index(")")].strip()
+                 self.body_label.configure(text=f"­ƒÆÇ Partes perdidas: {body_parts}" if body_parts != "nenhuma" else "")
+             
++            # Letras certas (parte 3) e erradas (parte 4)
+             if len(partes) >= 3:
+-                letras = partes[2].replace("Tentativas:", "").strip()
+-                self.tried_label.configure(text=f"Letras tentadas: {'  '.join(letras.split())}" if letras else "")
++                certas = partes[2].replace("Certas:", "").strip()
++                self.correct_label.configure(
++                    text=f"Ô£à Certas: {'  '.join(certas.split())}" if certas else "")
++            if len(partes) >= 4:
++                erradas = partes[3].replace("Erradas:", "").strip()
++                self.wrong_label.configure(
++                    text=f"ÔØî Erradas: {'  '.join(erradas.split())}" if erradas else "")
+         except Exception:
+             pass
+ 
+@@ -337,21 +350,22 @@ class ForcaClient(ctk.CTk):
+         self.in_game = False
+         self.reconnecting = False
+         self.latency_ms = -1
+-        self.user_id = str(uuid.uuid4())
++        self.latency_ms = -1
+         self.name_entry.configure(state="normal")
+-        self.name_entry.delete(0, 'end')
+-        self.name_entry.insert(0, f"Jogador_{self.user_id[:4]}")
+ 
+         self.new_game_btn.pack_forget()
+         self.word_label.configure(text="_ _ _ _ _")
+         self.draw_hangman(0)
+         self.status_label.configure(text="Desconectado", text_color=COLOR_WAIT)
+-        self.tried_label.configure(text="")
++        self.correct_label.configure(text="")
++        self.wrong_label.configure(text="")
+         self.body_label.configure(text="")
+         self.latency_label.configure(text="PING: -- ms", text_color=COLOR_GRAY)
+         self.letter_entry.configure(state="disabled")
+         self.send_btn.configure(state="disabled")
+-        self.connect_btn.configure(state="normal")
++        
++        # Voltar para a fila automaticamente
++        self.connect_server()
+ 
+     def on_closing(self):
+         self.connected = False
+diff --git a/forca.db b/forca.db
+index 0bb8d1a..5b6ee21 100644
+Binary files a/forca.db and b/forca.db differ
+diff --git a/servidor.py b/servidor.py
+index 751aa8b..90c04d8 100644
+--- a/servidor.py
++++ b/servidor.py
+@@ -40,6 +40,20 @@ server_info = {
+     "lock": threading.Lock(),
+ }
+ 
++# Registro de conex├Áes ativas de jogadores aguardando ÔÇö para notifica├º├Áes push
++waiting_clients = {}  # player_id -> socket connection
++waiting_clients_lock = threading.Lock()
++
++def notify_waiting_players(new_player_id, new_player_nome):
++    """Notifica jogadores na fila que um novo jogador se conectou."""
++    with waiting_clients_lock:
++        for pid, conn in list(waiting_clients.items()):
++            if pid != new_player_id:
++                try:
++                    safe_send(conn, f"­ƒôó Novo jogador na fila: {new_player_nome}! Pareamento em breve...\n")
++                except Exception:
++                    pass
++
+ def get_db_path():
+     return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'forca.db')
+ 
+@@ -162,6 +176,8 @@ def handle_client(client_conn, addr):
+         else:
+             cursor.execute("UPDATE jogadores SET status='waiting' WHERE id=?", (player_id,))
+             safe_send(client_conn, "Sua partida anterior ja terminou. Aguardando novo adversario...\n")
++            with waiting_clients_lock:
++                waiting_clients[player_id] = client_conn
+         db_conn.commit()
+     else:
+         cursor.execute(
+@@ -169,8 +185,12 @@ def handle_client(client_conn, addr):
+             (player_id, player_nome, 'waiting', server_info["port"])
+         )
+         db_conn.commit()
++        with waiting_clients_lock:
++            waiting_clients[player_id] = client_conn
+         if not safe_send(client_conn, f"Ola {player_nome}. Aguardando adversario...\n"):
+             return
++        # Notificar outros jogadores na fila que algu├®m novo entrou
++        notify_waiting_players(player_id, player_nome)
+ 
+     last_oculta = ""
+     last_erros = -1
+@@ -185,6 +205,9 @@ def handle_client(client_conn, addr):
+                 r = cursor.fetchone()
+                 if r:
+                     game_id = r[0]
++                    # Remover da lista de espera
++                    with waiting_clients_lock:
++                        waiting_clients.pop(player_id, None)
+                     safe_send(client_conn, "Adversario encontrado! O jogo vai comecar.\n")
+                     last_oculta = ""
+                     last_erros = -1
+@@ -243,22 +266,39 @@ def handle_client(client_conn, addr):
+                         break
+ 
+                 if status == 'finished':
++                    # Como o 'turno' no banco foi invertido ap├│s a ├║ltima jogada, 
++                    # se player_id != turno, ent├úo player_id foi quem fez a ├║ltima jogada.
++                    is_last_player = (player_id != turno)
++                    
+                     if "_" not in oculta:
+-                        safe_send(client_conn, f"VITORIA! A palavra era: {palavra}\n")
++                        if is_last_player:
++                            safe_send(client_conn, f"VITORIA! Voce acertou a ultima letra: {palavra}\n")
++                        else:
++                            safe_send(client_conn, f"DERROTA! O adversario completou a palavra: {palavra}\n")
+                     else:
+-                        safe_send(client_conn, f"DERROTA! A palavra era: {palavra}\n")
++                        if is_last_player:
++                            safe_send(client_conn, f"DERROTA! Voce esgotou as chances. A palavra era: {palavra}\n")
++                        else:
++                            safe_send(client_conn, f"VITORIA! O adversario foi enforcado. A palavra era: {palavra}\n")
+                     break
+ 
+                 if not opp_is_disconnected and status == 'active':
+                     if oculta != last_oculta or erros != last_erros:
+-                        letras_tentadas = ' '.join(tentativas.split(',')) if tentativas else ''
++                        # Separar letras certas e erradas
++                        letras_lista = tentativas.split(',') if tentativas else []
++                        letras_certas = [l for l in letras_lista if l in palavra]
++                        letras_erradas = [l for l in letras_lista if l not in palavra]
++                        certas_str = ' '.join(letras_certas) if letras_certas else ''
++                        erradas_str = ' '.join(letras_erradas) if letras_erradas else ''
++
+                         partes_corpo = ["cabeca", "tronco", "braco dir.", "braco esq.", "perna dir.", "perna esq."]
+                         erros_partes = [partes_corpo[i] for i in range(min(erros, MAX_ERROS))]
+                         partes_str = ', '.join(erros_partes) if erros_partes else 'nenhuma'
+ 
+                         estado = (f"\nPalavra: {' '.join(oculta)} | "
+                                   f"Erros: {erros}/{MAX_ERROS} ({partes_str}) | "
+-                                  f"Tentativas: {letras_tentadas}\n")
++                                  f"Certas: {certas_str} | "
++                                  f"Erradas: {erradas_str}\n")
+                         safe_send(client_conn, estado)
+                         last_oculta = oculta
+                         last_erros = erros
+@@ -324,6 +364,10 @@ def handle_client(client_conn, addr):
+     except Exception as e:
+         print(f"[CONN] {addr} ÔÇö conexao perdida: {e}")
+     finally:
++        # Remover da lista de espera ao desconectar
++        with waiting_clients_lock:
++            waiting_clients.pop(player_id, None)
++
+         try:
+             cleanup_db = get_db()
+             cleanup_cursor = cleanup_db.cursor()

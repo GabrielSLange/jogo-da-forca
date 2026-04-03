@@ -24,7 +24,8 @@ class ForcaClient(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Jogo da Forca Distribuído")
-        self.geometry("650x800")
+        self.geometry("620x650")
+        self.minsize(550, 600)
         self.resizable(True, True)
         self.configure(fg_color=BG_DARK)
         self.sock = None
@@ -40,10 +41,10 @@ class ForcaClient(ctk.CTk):
         self.servers = []
 
         self.header = ctk.CTkLabel(self, text="🎮 Jogo da Forca Distribuído", font=("Segoe UI", 22, "bold"), text_color=COLOR_WHITE)
-        self.header.pack(pady=(15, 5))
+        self.header.pack(pady=(10, 5))
 
         self.conn_frame = ctk.CTkFrame(self, fg_color=COLOR_ACCENT, corner_radius=12)
-        self.conn_frame.pack(pady=8, padx=20, fill="x")
+        self.conn_frame.pack(pady=5, padx=20, fill="x")
 
         row0 = ctk.CTkFrame(self.conn_frame, fg_color="transparent")
         row0.pack(pady=(10, 5), padx=15, fill="x")
@@ -79,11 +80,11 @@ class ForcaClient(ctk.CTk):
         self.latency_label.pack(side="right", padx=10)
 
         self.canvas = ctk.CTkCanvas(self, width=220, height=260, bg=BG_CANVAS, highlightthickness=0)
-        self.canvas.pack(pady=10)
+        self.canvas.pack(pady=5)
         self.draw_hangman(0)
 
         self.word_label = ctk.CTkLabel(self, text="_ _ _ _ _", font=("Courier New", 34, "bold"), text_color=COLOR_WHITE)
-        self.word_label.pack(pady=8)
+        self.word_label.pack(pady=5)
 
         self.status_label = ctk.CTkLabel(self, text="Desconectado", font=("Segoe UI", 15), text_color=COLOR_WAIT, wraplength=550)
         self.status_label.pack(pady=5)
@@ -91,11 +92,14 @@ class ForcaClient(ctk.CTk):
         self.body_label = ctk.CTkLabel(self, text="", font=("Segoe UI", 12), text_color=COLOR_LOSE, wraplength=500)
         self.body_label.pack(pady=2)
 
-        self.tried_label = ctk.CTkLabel(self, text="", font=("Segoe UI", 13), text_color=COLOR_GRAY)
-        self.tried_label.pack(pady=3)
+        self.correct_label = ctk.CTkLabel(self, text="", font=("Segoe UI", 13), text_color=COLOR_WIN)
+        self.correct_label.pack(pady=1)
+
+        self.wrong_label = ctk.CTkLabel(self, text="", font=("Segoe UI", 13), text_color=COLOR_LOSE)
+        self.wrong_label.pack(pady=1)
 
         self.input_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.input_frame.pack(pady=12)
+        self.input_frame.pack(pady=5)
 
         self.letter_entry = ctk.CTkEntry(self.input_frame, placeholder_text="Letra", width=80, height=40, font=("Courier New", 18, "bold"), justify="center")
         self.letter_entry.pack(side="left", padx=5)
@@ -106,7 +110,7 @@ class ForcaClient(ctk.CTk):
         self.send_btn.pack(side="left", padx=5)
         self.send_btn.configure(state="disabled")
 
-        self.new_game_btn = ctk.CTkButton(self, text="🔄 Novo Jogo", command=self.new_game, width=160, height=40, corner_radius=8, font=("Segoe UI", 14, "bold"), fg_color=COLOR_WIN, hover_color="#00cec9")
+        self.new_game_btn = ctk.CTkButton(self, text="🔄 Jogar Novamente", command=self.new_game, width=160, height=40, corner_radius=8, font=("Segoe UI", 14, "bold"), fg_color=COLOR_WIN, hover_color="#00cec9")
 
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -281,6 +285,9 @@ class ForcaClient(ctk.CTk):
             self.letter_entry.configure(state="normal")
             self.send_btn.configure(state="normal")
             return
+        if "Novo jogador na fila" in message or "Pareamento em breve" in message:
+            self.status_label.configure(text=message, text_color=COLOR_WIN)
+            return
 
         self.status_label.configure(text=message, text_color=COLOR_WHITE)
 
@@ -296,9 +303,15 @@ class ForcaClient(ctk.CTk):
                 body_parts = erros_str[erros_str.index("(")+1:erros_str.index(")")].strip()
                 self.body_label.configure(text=f"💀 Partes perdidas: {body_parts}" if body_parts != "nenhuma" else "")
             
+            # Letras certas (parte 3) e erradas (parte 4)
             if len(partes) >= 3:
-                letras = partes[2].replace("Tentativas:", "").strip()
-                self.tried_label.configure(text=f"Letras tentadas: {'  '.join(letras.split())}" if letras else "")
+                certas = partes[2].replace("Certas:", "").strip()
+                self.correct_label.configure(
+                    text=f"✅ Certas: {'  '.join(certas.split())}" if certas else "")
+            if len(partes) >= 4:
+                erradas = partes[3].replace("Erradas:", "").strip()
+                self.wrong_label.configure(
+                    text=f"❌ Erradas: {'  '.join(erradas.split())}" if erradas else "")
         except Exception:
             pass
 
@@ -337,21 +350,22 @@ class ForcaClient(ctk.CTk):
         self.in_game = False
         self.reconnecting = False
         self.latency_ms = -1
-        self.user_id = str(uuid.uuid4())
+        self.latency_ms = -1
         self.name_entry.configure(state="normal")
-        self.name_entry.delete(0, 'end')
-        self.name_entry.insert(0, f"Jogador_{self.user_id[:4]}")
 
         self.new_game_btn.pack_forget()
         self.word_label.configure(text="_ _ _ _ _")
         self.draw_hangman(0)
         self.status_label.configure(text="Desconectado", text_color=COLOR_WAIT)
-        self.tried_label.configure(text="")
+        self.correct_label.configure(text="")
+        self.wrong_label.configure(text="")
         self.body_label.configure(text="")
         self.latency_label.configure(text="PING: -- ms", text_color=COLOR_GRAY)
         self.letter_entry.configure(state="disabled")
         self.send_btn.configure(state="disabled")
-        self.connect_btn.configure(state="normal")
+        
+        # Voltar para a fila automaticamente
+        self.connect_server()
 
     def on_closing(self):
         self.connected = False
